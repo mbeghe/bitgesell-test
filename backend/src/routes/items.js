@@ -11,6 +11,9 @@ let lastId = Date.now();
 // Queue for write operations
 let writeQueue = Promise.resolve();
 
+let itemsCache = null;
+let lastModified = null;
+
 async function readData() {
   const raw = await fs.readFile(DATA_PATH);
   return JSON.parse(raw);
@@ -27,10 +30,42 @@ async function writeData(newItem) {
     const currentData = await readData();
     currentData.push(newItem);
     await fs.writeFile(DATA_PATH, JSON.stringify(currentData, null, 2));
+    
+    itemsCache = null;
+    lastModified = null;
   });
   
   // Wait for this specific write operation to complete
   await writeQueue;
+}
+
+async function isCacheValid() {
+  if (!itemsCache || !lastModified) return false;
+  
+  try {
+    const stats = await fs.stat(DATA_PATH);
+    return stats.mtime.getTime() === lastModified;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function updateCache() {
+  const items = await readData();
+  const stats = await fs.stat(DATA_PATH);
+  
+  itemsCache = items;
+  lastModified = stats.mtime.getTime();
+  
+  return items;
+}
+
+async function getItemsWithCache() {
+  if (await isCacheValid()) {
+    return itemsCache;
+  } else {
+    return await updateCache();
+  }
 }
 
 // Improved substring search function
@@ -48,23 +83,40 @@ function searchItems(items, query) {
 
 router.get('/', async (req, res, next) => {
   try {
-    const items = await readData();
-    const { limit, q } = req.query;
+    const items = await getItemsWithCache();
+    const { limit, q, page = 1 } = req.query;
     
     let results = items;
     
     // Apply search
     results = searchItems(results, q);
     
-    // Apply pagination
+    const totalItems = results.length;
+    const currentPage = parseInt(page) || 1;
+    const itemsPerPage = limit ? parseInt(limit) : totalItems;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const offset = (currentPage - 1) * itemsPerPage;
+    
     if (limit) {
       const limitNum = parseInt(limit);
       if (!isNaN(limitNum) && limitNum > 0) {
-        results = results.slice(0, limitNum);
+        results = results.slice(offset, offset + limitNum);
       }
     }
     
-    res.json(results);
+    res.json({
+      items: results,
+      pagination: {
+        total: totalItems,
+        page: currentPage,
+        limit: itemsPerPage,
+        totalPages: totalPages,
+        hasNext: limit ? currentPage < totalPages : false,
+        hasPrev: limit ? currentPage > 1 : false,
+        startItem: limit ? offset + 1 : 1,
+        endItem: limit ? Math.min(offset + itemsPerPage, totalItems) : totalItems
+      }
+    });
   } catch (err) {
     next(err);
   }
@@ -72,7 +124,7 @@ router.get('/', async (req, res, next) => {
 
 router.get('/:id', async (req, res, next) => {
   try {
-    const items = await readData();
+    const items = await getItemsWithCache();
     const item = items.find(item => item.id == req.params.id);
     
     if (!item) {

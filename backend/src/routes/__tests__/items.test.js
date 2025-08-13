@@ -89,35 +89,36 @@ describe('Items API Tests', () => {
       const response = await request(app).get('/api/items');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(7);
-      expect(response.body[0]).toHaveProperty('id');
-      expect(response.body[0]).toHaveProperty('name');
-      expect(response.body[0]).toHaveProperty('category');
-      expect(response.body[0]).toHaveProperty('price');
+      expect(response.body.items).toHaveLength(7);
+      expect(response.body.pagination).toBeDefined();
+      expect(response.body.items[0]).toHaveProperty('id');
+      expect(response.body.items[0]).toHaveProperty('name');
+      expect(response.body.items[0]).toHaveProperty('category');
+      expect(response.body.items[0]).toHaveProperty('price');
     });
 
     it('should search items by name (original functionality)', async () => {
       const response = await request(app).get('/api/items?q=laptop');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(1);
-      expect(response.body[0].name).toBe('Laptop Pro');
+      expect(response.body.items).toHaveLength(1);
+      expect(response.body.items[0].name).toBe('Laptop Pro');
     });
 
     it('should search items by category (improved functionality)', async () => {
       const response = await request(app).get('/api/items?q=electronics');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(4);
-      expect(response.body.every(item => item.category === 'Electronics')).toBe(true);
+      expect(response.body.items).toHaveLength(4);
+      expect(response.body.items.every(item => item.category === 'Electronics')).toBe(true);
     });
 
     it('should search items by partial name match', async () => {
       const response = await request(app).get('/api/items?q=chair');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(2);
-      expect(response.body.every(item => 
+      expect(response.body.items).toHaveLength(2);
+      expect(response.body.items.every(item => 
         item.name.toLowerCase().includes('chair')
       )).toBe(true);
     });
@@ -126,8 +127,8 @@ describe('Items API Tests', () => {
       const response = await request(app).get('/api/items?q=CHAIR');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(2);
-      expect(response.body.every(item => 
+      expect(response.body.items).toHaveLength(2);
+      expect(response.body.items.every(item => 
         item.name.toLowerCase().includes('chair')
       )).toBe(true);
     });
@@ -136,51 +137,77 @@ describe('Items API Tests', () => {
       const response = await request(app).get('/api/items?q=nonexistent');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(0);
+      expect(response.body.items).toHaveLength(0);
     });
 
     it('should limit results', async () => {
       const response = await request(app).get('/api/items?limit=3');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(3);
+      expect(response.body.items).toHaveLength(3);
+      expect(response.body.pagination.hasNext).toBe(true);
     });
 
     it('should combine search and limit', async () => {
       const response = await request(app).get('/api/items?q=electronics&limit=2');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(2);
-      expect(response.body.every(item => item.category === 'Electronics')).toBe(true);
+      expect(response.body.items).toHaveLength(2);
+      expect(response.body.items.every(item => item.category === 'Electronics')).toBe(true);
     });
 
     it('should handle invalid limit gracefully', async () => {
       const response = await request(app).get('/api/items?limit=invalid');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(7); // Should return all items
+      expect(response.body.items).toHaveLength(7); // Should return all items
     });
 
     it('should handle negative limit gracefully', async () => {
       const response = await request(app).get('/api/items?limit=-5');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(7); // Should return all items
+      expect(response.body.items).toHaveLength(7); // Should return all items
     });
 
     it('should handle zero limit gracefully', async () => {
       const response = await request(app).get('/api/items?limit=0');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(7); // Should return all items
+      expect(response.body.items).toHaveLength(7); // Should return all items
     });
 
     it('should handle whitespace in search query', async () => {
       const response = await request(app).get('/api/items?q=  laptop  ');
       
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(1);
-      expect(response.body[0].name).toBe('Laptop Pro');
+      expect(response.body.items).toHaveLength(1);
+      expect(response.body.items[0].name).toBe('Laptop Pro');
+    });
+
+    it('should handle pagination with page parameter', async () => {
+      const response = await request(app).get('/api/items?limit=3&page=2');
+      
+      expect(response.status).toBe(200);
+      expect(response.body.items).toHaveLength(3);
+      expect(response.body.pagination.page).toBe(2);
+      expect(response.body.pagination.hasPrev).toBe(true);
+    });
+
+    it('should return correct pagination metadata', async () => {
+      const response = await request(app).get('/api/items?limit=3');
+      
+      expect(response.status).toBe(200);
+      expect(response.body.pagination).toEqual({
+        total: 7,
+        page: 1,
+        limit: 3,
+        totalPages: 3,
+        hasNext: true,
+        hasPrev: false,
+        startItem: 1,
+        endItem: 3
+      });
     });
   });
 
