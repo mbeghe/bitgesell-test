@@ -21,18 +21,33 @@ app.use((err, req, res, next) => {
 describe('Concurrency Tests', () => {
   const testDataPath = path.join(__dirname, 'test-items.json');
   
-  // Test data
+  // Test data with categories
   const testData = [
-    { id: 1, name: 'Test Item 1', price: 10.99 },
-    { id: 2, name: 'Test Item 2', price: 20.50 }
+    { id: 1, name: 'Test Item 1', category: 'Electronics', price: 10.99 },
+    { id: 2, name: 'Test Item 2', category: 'Furniture', price: 20.50 }
   ];
   
+  // Store original functions to restore them
+  let originalReadFile, originalWriteFile;
+  
+  beforeAll(() => {
+    // Store original functions
+    originalReadFile = fs.readFile;
+    originalWriteFile = fs.writeFile;
+  });
+  
   beforeEach(async () => {
+    // Clear all mocks to avoid conflicts
+    jest.clearAllMocks();
+    
+    // Restore original functions
+    fs.readFile = originalReadFile;
+    fs.writeFile = originalWriteFile;
+    
     // Create test data file
     await fs.writeFile(testDataPath, JSON.stringify(testData, null, 2));
     
     // Mock fs.readFile to read from our test file
-    const originalReadFile = fs.readFile;
     fs.readFile = jest.fn().mockImplementation((filePath) => {
       if (filePath.includes('items.json')) {
         return originalReadFile(testDataPath, 'utf8');
@@ -41,7 +56,6 @@ describe('Concurrency Tests', () => {
     });
 
     // Mock fs.writeFile to write to our test file
-    const originalWriteFile = fs.writeFile;
     fs.writeFile = jest.fn().mockImplementation((filePath, data) => {
       if (filePath.includes('items.json')) {
         return originalWriteFile(testDataPath, data);
@@ -66,13 +80,21 @@ describe('Concurrency Tests', () => {
     } catch (err) {
       // File doesn't exist, that's ok
     }
+    
+    // Restore original functions
+    fs.readFile = originalReadFile;
+    fs.writeFile = originalWriteFile;
   });
 
   it('should handle concurrent POST requests without data loss', async () => {
     const concurrentRequests = Array.from({ length: 5 }, (_, i) => 
       request(app)
         .post('/api/items')
-        .send({ name: `Concurrent Item ${i + 1}`, price: 10 + i })
+        .send({ 
+          name: `Concurrent Item ${i + 1}`, 
+          category: i % 2 === 0 ? 'Electronics' : 'Furniture',
+          price: 10 + i 
+        })
     );
 
     // Execute all requests simultaneously
@@ -83,6 +105,7 @@ describe('Concurrency Tests', () => {
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.name).toBeDefined();
+      expect(response.body.category).toBeDefined();
     });
 
     // All IDs should be unique
@@ -99,7 +122,8 @@ describe('Concurrency Tests', () => {
         expect.arrayContaining([
           expect.objectContaining({ 
             id: response.body.id,
-            name: response.body.name 
+            name: response.body.name,
+            category: response.body.category
           })
         ])
       );
@@ -111,7 +135,11 @@ describe('Concurrency Tests', () => {
     const concurrentRequests = Array.from({ length: 10 }, (_, i) => 
       request(app)
         .post('/api/items')
-        .send({ name: `Stress Item ${i + 1}`, price: 100 + i })
+        .send({ 
+          name: `Stress Item ${i + 1}`, 
+          category: i % 3 === 0 ? 'Electronics' : i % 3 === 1 ? 'Furniture' : 'Books',
+          price: 100 + i 
+        })
     );
 
     const responses = await Promise.all(concurrentRequests);
@@ -119,6 +147,7 @@ describe('Concurrency Tests', () => {
     // All should succeed
     responses.forEach(response => {
       expect(response.status).toBe(201);
+      expect(response.body.category).toBeDefined();
     });
 
     // Verify no data loss by reading the test file
