@@ -1,62 +1,66 @@
 const express = require('express');
-const fs = require('fs');
+const fs = require('fs').promises;
 const path = require('path');
 const router = express.Router();
+
 const DATA_PATH = path.join(__dirname, '../../../data/items.json');
 
-// Utility to read data (intentionally sync to highlight blocking issue)
-function readData() {
-  const raw = fs.readFileSync(DATA_PATH);
+let lastId = Date.now();
+
+// Queue for write operations
+let writeQueue = Promise.resolve();
+
+async function readData() {
+  const raw = await fs.readFile(DATA_PATH);
   return JSON.parse(raw);
 }
 
-// GET /api/items
-router.get('/', (req, res, next) => {
+function generateUniqueId() {
+  lastId = Math.max(lastId + 1, Date.now());
+  return lastId;
+}
+
+async function writeData(newItem) {
+  // Add to queue and wait for previous operations to complete
+  writeQueue = writeQueue.then(async () => {
+    const currentData = await readData();
+    currentData.push(newItem);
+    await fs.writeFile(DATA_PATH, JSON.stringify(currentData, null, 2));
+  });
+  
+  // Wait for this specific write operation to complete
+  await writeQueue;
+}
+
+router.get('/', async (req, res, next) => {
   try {
-    const data = readData();
-    const { limit, q } = req.query;
-    let results = data;
-
-    if (q) {
-      // Simple substring search (sub‑optimal)
-      results = results.filter(item => item.name.toLowerCase().includes(q.toLowerCase()));
-    }
-
-    if (limit) {
-      results = results.slice(0, parseInt(limit));
-    }
-
-    res.json(results);
+    const items = await readData();
+    res.json(items);
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/items/:id
-router.get('/:id', (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
-    const data = readData();
-    const item = data.find(i => i.id === parseInt(req.params.id));
+    const items = await readData();
+    const item = items.find(item => item.id == req.params.id);
+    
     if (!item) {
-      const err = new Error('Item not found');
-      err.status = 404;
-      throw err;
+      return res.status(404).json({ message: 'Item not found' });
     }
+    
     res.json(item);
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/items
-router.post('/', (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
-    // TODO: Validate payload (intentional omission)
     const item = req.body;
-    const data = readData();
-    item.id = Date.now();
-    data.push(item);
-    fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2));
+    item.id = generateUniqueId();
+    await writeData(item);
     res.status(201).json(item);
   } catch (err) {
     next(err);
