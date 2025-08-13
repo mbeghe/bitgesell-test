@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
+const { validateItem } = require('../middleware/validations');
 const router = express.Router();
 
 const DATA_PATH = path.join(__dirname, '../../../data/items.json');
@@ -32,10 +33,38 @@ async function writeData(newItem) {
   await writeQueue;
 }
 
+// Improved substring search function
+function searchItems(items, query) {
+  if (!query) return items;
+  
+  const searchTerm = query.toLowerCase().trim();
+  
+  return items.filter(item => {
+    // Search in multiple fields: name, category
+    return item.name.toLowerCase().includes(searchTerm) ||
+           (item.category && item.category.toLowerCase().includes(searchTerm));
+  });
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const items = await readData();
-    res.json(items);
+    const { limit, q } = req.query;
+    
+    let results = items;
+    
+    // Apply search
+    results = searchItems(results, q);
+    
+    // Apply pagination
+    if (limit) {
+      const limitNum = parseInt(limit);
+      if (!isNaN(limitNum) && limitNum > 0) {
+        results = results.slice(0, limitNum);
+      }
+    }
+    
+    res.json(results);
   } catch (err) {
     next(err);
   }
@@ -56,7 +85,7 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', validateItem, async (req, res, next) => {
   try {
     const item = req.body;
     item.id = generateUniqueId();
