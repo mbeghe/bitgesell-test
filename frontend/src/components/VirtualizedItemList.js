@@ -3,8 +3,8 @@ import { FixedSizeList as List } from 'react-window';
 import { Link } from 'react-router-dom';
 
 const VirtualizedItemList = ({ items, height = 600 }) => {
-  // Item height for each row
-  const itemHeight = 80;
+
+  const itemHeight = 88; // Adjusted to better match paginated list row height
 
   // Row renderer function
   const Row = ({ index, style }) => {
@@ -14,7 +14,7 @@ const VirtualizedItemList = ({ items, height = 600 }) => {
       return (
         <div style={style} className="item-row">
           <div style={{ 
-            padding: '20px', 
+            padding: '20px 24px', 
             textAlign: 'center', 
             color: '#666',
             display: 'flex',
@@ -29,36 +29,46 @@ const VirtualizedItemList = ({ items, height = 600 }) => {
     }
 
     return (
-      <div style={style} className="item-row">
-        <div style={{
-          padding: '15px 20px',
-          borderBottom: '1px solid #eee',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          height: '100%',
-          boxSizing: 'border-box',
-          backgroundColor: 'white'
-        }}>
+      <div style={style} className="item-row hover-effect">
+        <div 
+          style={{
+            padding: '20px 24px',
+            borderBottom: index < items.length - 1 ? '1px solid #e9ecef' : 'none',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            height: '100%',
+            boxSizing: 'border-box',
+            backgroundColor: 'white'
+          }}
+        >
           <div>
             <Link 
               to={'/items/' + item.id}
               style={{
                 textDecoration: 'none',
                 color: '#007bff',
-                fontSize: '16px',
-                fontWeight: '500'
+                fontSize: '18px',
+                fontWeight: '500',
+                display: 'block',
+                marginBottom: '4px'
               }}
             >
               {item.name}
             </Link>
             <div style={{ 
-              color: '#666', 
-              fontSize: '14px',
-              marginTop: '4px'
+              color: '#6c757d', 
+              fontSize: '14px'
             }}>
               {item.category} • ${item.price}
             </div>
+          </div>
+          <div style={{
+            color: '#28a745',
+            fontSize: '16px',
+            fontWeight: '600'
+          }}>
+            ${item.price}
           </div>
         </div>
       </div>
@@ -72,9 +82,11 @@ const VirtualizedItemList = ({ items, height = 600 }) => {
       itemSize={itemHeight}
       width="100%"
       style={{
-        border: '1px solid #eee',
-        borderRadius: '4px',
-        backgroundColor: 'white'
+        backgroundColor: 'white',
+        borderRadius: '8px',
+        overflowX: 'hidden',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        border: '1px solid #e9ecef'
       }}
     >
       {Row}
