@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
 const { validateItem } = require('../middleware/validations');
+const { log } = require('../utils/logger');
 const router = express.Router();
 
 const DATA_PATH = path.join(__dirname, '../../../data/items.json');
@@ -27,12 +28,24 @@ function generateUniqueId() {
 async function writeData(newItem) {
   // Add to queue and wait for previous operations to complete
   writeQueue = writeQueue.then(async () => {
+    log.info('WRITE', `Adding new item: ${newItem.name}`, {
+      operation: 'adding',
+      itemName: newItem.name,
+      itemId: newItem.id
+    });
+    
     const currentData = await readData();
     currentData.push(newItem);
     await fs.writeFile(DATA_PATH, JSON.stringify(currentData, null, 2));
     
     itemsCache = null;
     lastModified = null;
+    
+    log.info('WRITE', `Successfully added item: ${newItem.name}`, {
+      operation: 'success',
+      itemName: newItem.name,
+      itemId: newItem.id
+    });
   });
   
   // Wait for this specific write operation to complete
@@ -51,17 +64,29 @@ async function isCacheValid() {
 }
 
 async function updateCache() {
+  log.debug('CACHE', 'Updating items cache', {
+    operation: 'updating'
+  });
+  
   const items = await readData();
   const stats = await fs.stat(DATA_PATH);
   
   itemsCache = items;
   lastModified = stats.mtime.getTime();
   
+  log.debug('CACHE', `Cache updated with ${items.length} items`, {
+    operation: 'updated',
+    itemCount: items.length
+  });
+  
   return items;
 }
 
 async function getItemsWithCache() {
   if (await isCacheValid()) {
+    log.debug('CACHE', 'Using cached items data', {
+      operation: 'hit'
+    });
     return itemsCache;
   } else {
     return await updateCache();
@@ -74,11 +99,18 @@ function searchItems(items, query) {
   
   const searchTerm = query.toLowerCase().trim();
   
-  return items.filter(item => {
+  const results = items.filter(item => {
     // Search in multiple fields: name, category
     return item.name.toLowerCase().includes(searchTerm) ||
            (item.category && item.category.toLowerCase().includes(searchTerm));
   });
+  
+  log.debug('SEARCH', `Found ${results.length} items matching "${searchTerm}"`, {
+    query: searchTerm,
+    resultsCount: results.length
+  });
+  
+  return results;
 }
 
 router.get('/', async (req, res, next) => {
@@ -118,6 +150,11 @@ router.get('/', async (req, res, next) => {
       }
     });
   } catch (err) {
+    log.error('ERROR', 'Error in GET /api/items', {
+      context: 'GET /api/items',
+      error: err.message,
+      stack: err.stack
+    });
     next(err);
   }
 });
@@ -133,6 +170,11 @@ router.get('/:id', async (req, res, next) => {
     
     res.json(item);
   } catch (err) {
+    log.error('ERROR', `Error in GET /api/items/${req.params.id}`, {
+      context: `GET /api/items/${req.params.id}`,
+      error: err.message,
+      stack: err.stack
+    });
     next(err);
   }
 });
@@ -144,6 +186,11 @@ router.post('/', validateItem, async (req, res, next) => {
     await writeData(item);
     res.status(201).json(item);
   } catch (err) {
+    log.error('ERROR', 'Error in POST /api/items', {
+      context: 'POST /api/items',
+      error: err.message,
+      stack: err.stack
+    });
     next(err);
   }
 });

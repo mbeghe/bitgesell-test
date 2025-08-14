@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import SearchInput from './SearchInput';
 
 function SearchAndPagination({ 
   onSearch, 
@@ -11,23 +12,6 @@ function SearchAndPagination({
   startItem,
   endItem
 }) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-
-  // Debounce search term to avoid too many API calls
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  // Trigger search when debounced term changes
-  useEffect(() => {
-    onSearch(debouncedSearchTerm);
-  }, [debouncedSearchTerm, onSearch]);
-
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   return (
@@ -42,23 +26,7 @@ function SearchAndPagination({
       }}>
         {/* Search */}
         <div style={{ marginBottom: '24px' }}>
-          <input
-            type="text"
-            placeholder="Search items by name or category..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: '100%',
-              maxWidth: '400px',
-              padding: '12px 16px',
-              border: '2px solid #e9ecef',
-              borderRadius: '8px',
-              fontSize: '16px',
-              transition: 'border-color 0.2s ease'
-            }}
-            onFocus={(e) => e.target.style.borderColor = '#007bff'}
-            onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-          />
+          <SearchInput onSearch={onSearch} />
         </div>
 
         <div style={{ 

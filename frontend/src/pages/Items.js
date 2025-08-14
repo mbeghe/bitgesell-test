@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useData } from '../state/DataContext';
 import { Link } from 'react-router-dom';
 import VirtualizedItemList from '../components/VirtualizedItemList';
+import SearchAndPagination from '../components/SearchAndPagination';
+import SearchInput from '../components/SearchInput';
 
 function Items() {
   const { 
@@ -9,10 +11,7 @@ function Items() {
     fetchItems, 
     loading, 
     error, 
-    pagination,
-    allItems,
-    fetchAllItems,
-    virtualizationLoading
+    pagination
   } = useData();
   
   const [currentPage, setCurrentPage] = useState(1);
@@ -21,20 +20,20 @@ function Items() {
   const itemsPerPage = 5;
 
   // Fetch items with current search and pagination
-  const loadItems = useCallback(async (abortSignal) => {
+  const loadItems = useCallback(async (abortSignal, searchQuery = searchTerm) => {
     if (useVirtualization) {
-      await fetchAllItems(abortSignal, searchTerm);
+      const params = searchQuery ? { q: searchQuery } : {};
+      await fetchItems(abortSignal, params);
     } else {
       const params = {
         limit: itemsPerPage,
         page: currentPage,
-        q: searchTerm || undefined
+        q: searchQuery || undefined
       };
       await fetchItems(abortSignal, params);
     }
-  }, [fetchItems, fetchAllItems, searchTerm, currentPage, useVirtualization]);
+  }, [fetchItems, searchTerm, currentPage, useVirtualization, itemsPerPage]);
 
-  // Handle search
   const handleSearch = useCallback((term) => {
     setSearchTerm(term);
     setCurrentPage(1); // Reset to first page when searching
@@ -45,12 +44,30 @@ function Items() {
     setCurrentPage(newPage);
   }, []);
 
-  // Load items when component mounts or search/page changes
+  // Load items when component mounts or page changes (for pagination)
   useEffect(() => {
-    const abortController = new AbortController();
-    loadItems(abortController.signal);
-    return () => abortController.abort();
-  }, [loadItems]);
+    if (!useVirtualization) {
+      const abortController = new AbortController();
+      loadItems(abortController.signal);
+      return () => abortController.abort();
+    }
+  }, [loadItems, useVirtualization]);
+
+  useEffect(() => {
+    if (useVirtualization) {
+      const abortController = new AbortController();
+      loadItems(abortController.signal);
+      return () => abortController.abort();
+    }
+  }, [useVirtualization, loadItems]);
+
+  useEffect(() => {
+    if (useVirtualization) {
+      const abortController = new AbortController();
+      loadItems(abortController.signal, searchTerm);
+      return () => abortController.abort();
+    }
+  }, [searchTerm, useVirtualization, loadItems]);
 
   if (error) {
     return (
@@ -89,9 +106,6 @@ function Items() {
       </div>
     );
   }
-
-  const currentItems = useVirtualization ? allItems : items;
-  const isLoading = useVirtualization ? virtualizationLoading : loading;
 
   return (
     <div className="fade-in">
@@ -149,138 +163,44 @@ function Items() {
         </div>
       </div>
 
-      {/* Search and Pagination Area - Fixed Height */}
-      <div style={{ 
-        padding: '24px', 
-        borderBottom: '1px solid #e9ecef',
-        backgroundColor: 'white',
-        height: '120px', // Fixed height instead of minHeight
-        position: 'relative' // For absolute positioning of pagination controls
-      }}>
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between'
-        }}>
-          {/* Search - Always at the top */}
-          <div>
-            <input
-              type="text"
-              placeholder="Search items by name or category..."
-              value={searchTerm}
-              onChange={(e) => handleSearch(e.target.value)}
-              style={{
-                width: '100%',
-                maxWidth: '400px',
-                padding: '12px 16px',
-                border: '2px solid #e9ecef',
-                borderRadius: '8px',
-                fontSize: '16px',
-                transition: 'border-color 0.2s ease'
-              }}
-              onFocus={(e) => e.target.style.borderColor = '#007bff'}
-              onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
-            />
-          </div>
+      {!useVirtualization && (
+        <SearchAndPagination
+          onSearch={handleSearch}
+          onPageChange={handlePageChange}
+          totalItems={pagination?.total || 0}
+          currentPage={currentPage}
+          itemsPerPage={itemsPerPage}
+          hasNext={pagination?.hasNext || false}
+          hasPrev={pagination?.hasPrev || false}
+          startItem={pagination?.startItem || 0}
+          endItem={pagination?.endItem || 0}
+        />
+      )}
 
-          {/* Pagination Controls - Only for traditional pagination */}
-          {!useVirtualization ? (
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '16px'
-            }}>
-              <div style={{ 
-                color: '#6c757d',
-                fontSize: '14px',
-                fontWeight: '500',
-                lineHeight: '1.4'
-              }}>
-                Showing {pagination?.startItem || 0}-{pagination?.endItem || 0} of {pagination?.total || 0} items
-              </div>
-              
-              {/* Pagination Controls */}
-              <div style={{ 
-                display: 'flex', 
-                gap: '8px',
-                alignItems: 'center'
-              }}>
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={!pagination?.hasPrev}
-                  className="hover-effect"
-                  style={{
-                    padding: '10px 16px',
-                    border: '2px solid #e9ecef',
-                    backgroundColor: !pagination?.hasPrev ? '#f8f9fa' : 'white',
-                    color: !pagination?.hasPrev ? '#adb5bd' : '#495057',
-                    cursor: !pagination?.hasPrev ? 'not-allowed' : 'pointer',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    transition: 'all 0.2s ease',
-                    minWidth: '80px'
-                  }}
-                >
-                  Previous
-                </button>
-                
-                <div style={{ 
-                  padding: '10px 16px',
-                  border: '2px solid #007bff',
-                  backgroundColor: '#007bff',
-                  color: 'white',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  minWidth: '80px',
-                  textAlign: 'center'
-                }}>
-                  {pagination?.page || 1} of {Math.ceil((pagination?.total || 0) / itemsPerPage)}
-                </div>
-                
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={!pagination?.hasNext}
-                  className="hover-effect"
-                  style={{
-                    padding: '10px 16px',
-                    border: '2px solid #e9ecef',
-                    backgroundColor: !pagination?.hasNext ? '#f8f9fa' : 'white',
-                    color: !pagination?.hasNext ? '#adb5bd' : '#495057',
-                    cursor: !pagination?.hasNext ? 'not-allowed' : 'pointer',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    transition: 'all 0.2s ease',
-                    minWidth: '80px'
-                  }}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* Virtualization Info */
+      {useVirtualization && (
+        <div style={{ 
+          padding: '24px', 
+          borderBottom: '1px solid #e9ecef',
+          backgroundColor: 'white'
+        }}>
+          <div style={{
+            maxWidth: '1200px',
+            margin: '0 auto'
+          }}>
+            <SearchInput onSearch={handleSearch} />
             <div style={{ 
               color: '#6c757d', 
               fontSize: '14px',
               fontWeight: '500',
-              lineHeight: '1.4'
+              marginTop: '12px'
             }}>
-              Showing {currentItems.length} items
+              Showing {items.length} items
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
       
-      {isLoading ? (
+      {loading ? (
         <div style={{
           display: 'flex',
           justifyContent: 'center',
@@ -305,7 +225,7 @@ function Items() {
             {useVirtualization ? 'Loading all items...' : 'Loading items...'}
           </p>
         </div>
-      ) : currentItems.length === 0 ? (
+      ) : items.length === 0 ? (
         <div style={{
           display: 'flex',
           justifyContent: 'center',
@@ -333,7 +253,7 @@ function Items() {
         }}>
           {useVirtualization ? (
             <VirtualizedItemList 
-              items={currentItems} 
+              items={items} 
               height={440}
             />
           ) : (
@@ -345,13 +265,13 @@ function Items() {
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
               border: '1px solid #e9ecef'
             }}>
-              {currentItems.map((item, index) => (
+              {items.map((item, index) => (
                 <div 
                   key={item.id} 
                   className="hover-effect"
                   style={{
                     padding: '20px 24px',
-                    borderBottom: index < currentItems.length - 1 ? '1px solid #e9ecef' : 'none',
+                    borderBottom: index < items.length - 1 ? '1px solid #e9ecef' : 'none',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',

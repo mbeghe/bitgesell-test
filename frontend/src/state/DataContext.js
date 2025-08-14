@@ -7,14 +7,11 @@ export function DataProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState(null);
-  
-  // For virtualization - all items without pagination
-  const [allItems, setAllItems] = useState([]);
-  const [virtualizationLoading, setVirtualizationLoading] = useState(false);
 
   const fetchItems = useCallback(async (abortSignal, params = {}) => {
     try {
       setLoading(true);
+      const isVirtualization = !params.limit && !params.page;
       setError(null);
       
       // Build query string from params
@@ -39,7 +36,11 @@ export function DataProvider({ children }) {
       // Only update state if the component is still mounted
       if (!abortSignal.aborted) {
         setItems(data.items || []);
-        setPagination(data.pagination || null);
+        if (!isVirtualization) {
+          setPagination(data.pagination || null);
+        } else {
+          setPagination(null);
+        }
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
@@ -53,54 +54,13 @@ export function DataProvider({ children }) {
     }
   }, []);
 
-  // For virtualization - fetch all items without pagination
-  const fetchAllItems = useCallback(async (abortSignal, searchTerm = '') => {
-    try {
-      setVirtualizationLoading(true);
-      setError(null);
-      
-      const queryParams = new URLSearchParams();
-      if (searchTerm) queryParams.append('q', searchTerm);
-      
-      const queryString = queryParams.toString();
-      const url = `http://localhost:3001/api/items${queryString ? `?${queryString}` : ''}`;
-      
-      const res = await fetch(url, {
-        signal: abortSignal
-      });
-      
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-      
-      const data = await res.json();
-      
-      if (!abortSignal.aborted) {
-        setAllItems(data.items || []);
-      }
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        console.error('Error fetching all items:', error);
-        setError(error.message);
-      }
-    } finally {
-      if (!abortSignal.aborted) {
-        setVirtualizationLoading(false);
-      }
-    }
-  }, []);
-
   return (
     <DataContext.Provider value={{ 
       items, 
       fetchItems, 
       loading, 
       error,
-      pagination,
-      // Virtualization props
-      allItems,
-      fetchAllItems,
-      virtualizationLoading
+      pagination
     }}>
       {children}
     </DataContext.Provider>

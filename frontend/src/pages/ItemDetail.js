@@ -8,29 +8,24 @@ function ItemDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
-  const { items, allItems, fetchAllItems, virtualizationLoading } = useData();
+  const { items, fetchItems, loading: contextLoading } = useData();
 
   useEffect(() => {
     setLoading(true);
     setError(null);
     
-    // Try to find item in current items (pagination mode)
     let foundItem = items.find(item => item.id == id);
-    
-    // If not found in current items, try in allItems (virtualization mode)
-    if (!foundItem && allItems.length > 0) {
-      foundItem = allItems.find(item => item.id == id);
-    }
     
     if (foundItem) {
       setItem(foundItem);
       setLoading(false);
     } else {
       // Only fetch if we don't have any items loaded
-      if (items.length === 0 && allItems.length === 0) {
+      if (items.length === 0) {
         const abortController = new AbortController();
         
-        fetchAllItems(abortController.signal)
+        // Fetch all items without pagination
+        fetchItems(abortController.signal, {})
           .catch(err => {
             console.error('Error fetching items:', err);
             setError(err.message);
@@ -44,13 +39,12 @@ function ItemDetail() {
         setLoading(false);
       }
     }
-  }, [id, items, allItems, fetchAllItems]);
+  }, [id, items, fetchItems]);
 
   // Handle when items are loaded after fetch
   useEffect(() => {
-    if ((items.length > 0 || allItems.length > 0) && loading) {
-      const foundItem = items.find(item => item.id == id) || 
-                       allItems.find(item => item.id == id);
+    if (items.length > 0 && loading) {
+      const foundItem = items.find(item => item.id == id);
       
       if (foundItem) {
         setItem(foundItem);
@@ -60,9 +54,11 @@ function ItemDetail() {
         setLoading(false);
       }
     }
-  }, [items, allItems, id, loading]);
+  }, [items, id, loading]);
 
-  if (loading || virtualizationLoading) {
+  const isLoading = loading || contextLoading;
+
+  if (isLoading) {
     return (
       <div style={{
         display: 'flex',
